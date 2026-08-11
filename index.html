@@ -111,6 +111,15 @@
 
   /* 出力 */
   #output{margin-top:8px}
+  .bulk-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:rgba(212,166,60,.1);border:1px solid rgba(212,166,60,.35);border-radius:12px;
+    padding:11px 14px;margin:0 0 14px;}
+  .bulk-label{font-size:12px;font-weight:700;color:var(--gold-lite);letter-spacing:.1em}
+  .bulk-copy{border:none;border-radius:10px;cursor:pointer;
+    background:linear-gradient(150deg,var(--gold-lite),var(--gold));color:#191410;
+    font-size:13px;font-weight:800;padding:9px 16px;white-space:nowrap;transition:.18s;}
+  .bulk-copy:hover{filter:brightness(1.06)}
+  .bulk-copy.done{background:var(--green);color:#fff}
   .out-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin:0 0 14px;}
   .out-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 11px}
   .badge{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:800;
@@ -454,42 +463,64 @@ function fallbackCopy(text){ var t=document.createElement('textarea'); t.value=t
 document.getElementById('go').addEventListener('click', function(){
   if(!state.scene){ alert('STEP2でシーンを選んでください🎯'); return; }
   if(!state.pub){ alert('STEP3で「SNS掲載OK」か「社内記録のみ」を選んでください。'); return; }
-  var out=document.getElementById('output'); out.innerHTML='';
   var isPrivate=(state.pub==='private'||state.scene==='claim');
   var isContent=CONTENT[state.scene];
+  var items=[]; /* {cls, name, text, post} … postはまとめコピー対象か */
 
   if(isContent){
     var c=ctxHassin();
     if(!c.q){ alert('STEP4に「質問／お悩み」を入力してください。'); return; }
     if(isPrivate){
-      out.appendChild(privateFlag());
-      out.appendChild(outCard('b-int','社内記録', contentRecord(state.scene, c)));
+      items.push({cls:'b-int',name:'社内記録',text:contentRecord(state.scene, c),post:false});
     }else{
       var T=buildHassin(state.scene, c);
-      out.appendChild(outCard('b-fb','Facebook', T.fb));
-      out.appendChild(outCard('b-ig','Instagram', T.ig));
-      out.appendChild(outCard('b-x','X（旧Twitter）', T.x));
-      out.appendChild(outCard('b-th','Threads', T.th));
-      out.appendChild(outCard('b-col','コラム草稿', T.col));
-      out.appendChild(outCard('b-int','社内記録', contentRecord(state.scene, c)));
+      items.push({cls:'b-fb',name:'Facebook',text:T.fb,post:true});
+      items.push({cls:'b-ig',name:'Instagram',text:T.ig,post:true});
+      items.push({cls:'b-x',name:'X（旧Twitter）',text:T.x,post:true});
+      items.push({cls:'b-th',name:'Threads',text:T.th,post:true});
+      items.push({cls:'b-col',name:'コラム草稿',text:T.col,post:true});
+      items.push({cls:'b-int',name:'社内記録',text:contentRecord(state.scene, c),post:false});
     }
   }else{
     var cg=ctxGenba();
     if(isPrivate){
-      out.appendChild(privateFlag());
-      out.appendChild(outCard('b-int','社内記録', internalReport(state.scene, cg)));
+      items.push({cls:'b-int',name:'社内記録',text:internalReport(state.scene, cg),post:false});
     }else{
       var G=buildGenba(state.scene, cg);
-      out.appendChild(outCard('b-fb','Facebook', G.fb));
-      out.appendChild(outCard('b-ig','Instagram', G.ig));
-      out.appendChild(outCard('b-x','X（旧Twitter）', G.x));
-      out.appendChild(outCard('b-th','Threads', G.th));
-      out.appendChild(outCard('b-col','コラム草稿', G.col));
-      out.appendChild(outCard('b-int','社内記録', internalReport(state.scene, cg)));
+      items.push({cls:'b-fb',name:'Facebook',text:G.fb,post:true});
+      items.push({cls:'b-ig',name:'Instagram',text:G.ig,post:true});
+      items.push({cls:'b-x',name:'X（旧Twitter）',text:G.x,post:true});
+      items.push({cls:'b-th',name:'Threads',text:G.th,post:true});
+      items.push({cls:'b-col',name:'コラム草稿',text:G.col,post:true});
+      items.push({cls:'b-int',name:'社内記録',text:internalReport(state.scene, cg),post:false});
     }
   }
+
+  var out=document.getElementById('output'); out.innerHTML='';
+  if(isPrivate){ out.appendChild(privateFlag()); }
+
+  /* 投稿文が2つ以上あるときだけ、まとめコピーのバーを出す */
+  var posts=items.filter(function(x){ return x.post; });
+  if(posts.length>=2){ out.appendChild(bulkBar(posts)); }
+
+  items.forEach(function(x){ out.appendChild(outCard(x.cls, x.name, x.text)); });
   out.scrollIntoView({behavior:'smooth', block:'start'});
 });
+
+/* まとめコピーのバー（投稿文を見出し＋区切り線でつないで一括コピー） */
+function bulkBar(posts){
+  var joined=posts.map(function(x){ return '■'+x.name+'\n'+x.text; }).join('\n\n──────────────────\n\n');
+  var bar=document.createElement('div'); bar.className='bulk-bar';
+  var label=document.createElement('span'); label.className='bulk-label'; label.textContent='生成結果';
+  var btn=document.createElement('button'); btn.className='bulk-copy'; btn.textContent='投稿文をまとめてコピー';
+  btn.addEventListener('click', function(){
+    function ok(){ btn.textContent='コピーしました'; btn.classList.add('done'); setTimeout(function(){ btn.textContent='投稿文をまとめてコピー'; btn.classList.remove('done'); },1600); }
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(joined).then(ok).catch(function(){ fallbackCopy(joined); ok(); }); }
+    else{ fallbackCopy(joined); ok(); }
+  });
+  bar.appendChild(label); bar.appendChild(btn);
+  return bar;
+}
 
 function privateFlag(){
   var flag=document.createElement('div'); flag.className='private-flag';
